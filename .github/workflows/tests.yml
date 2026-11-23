@@ -1,0 +1,44 @@
+name: Tests
+
+# Live Data's synthetic checks (no SDK, renderer or car needed). The head unit runs Node 8.16.2, so code that only
+# works on newer Node passes on a desktop and fails in the car: the tests run on both.
+on:
+  pull_request:
+  push:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: tests-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  live-data:
+    name: Live Data on Node ${{ matrix.node }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        node: ['8.16.2', '22']
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node }}
+      - run: node --version
+      - run: for f in apps/*/*.js; do node --check "$f"; done
+      - run: node kit/tools/test_live_data.js
+
+  preview-build:
+    name: Build without the SDK
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: python3 kit/tools/build.py --preview-only tgl_live_data
