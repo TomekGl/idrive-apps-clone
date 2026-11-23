@@ -4,6 +4,17 @@
 // defaults (screens, currency, fuel price). Runs without the local catalog (catalog/, not in git).
 //   node kit/tools/test_live_data.js
 const assert = require('assert'), fs = require('fs'), path = require('path'), os = require('os');
+// assert.rejects(promise, regexp) only exists from Node 10; the head unit runs 8.16.2
+const rejects = (promise, re) => promise.then(() => assert.fail('expected a rejection'), (e) => assert.ok(re.test(e && e.message || e), 'rejected with: ' + e));
+// fs.rmSync only exists from Node 14.14
+const removeTree = (dir) => {
+    if (!fs.existsSync(dir)) return;
+    fs.readdirSync(dir).forEach((name) => {
+        const p = path.join(dir, name);
+        if (fs.lstatSync(p).isDirectory()) removeTree(p); else fs.unlinkSync(p);
+    });
+    fs.rmdirSync(dir);
+};
 const { execFileSync } = require('child_process');
 const ROOT = path.resolve(__dirname, '..', '..');
 const kit = path.join(ROOT, 'kit', 'runtime');
@@ -73,16 +84,16 @@ async function main() {
     assert.deepStrictEqual(await link.read(0x12, 0x4A36), [0x62, 0x4A, 0x36, 0x01]);
     assert.deepStrictEqual(await link.readMany(0x12, [0x4402, 0x586F]), [0x62, 0x44, 0x02, 0x01, 0x58, 0x6F, 0x01]);
     assert.deepStrictEqual(t.sent[t.sent.length - 1].data, [0x44, 0x02, 0x58, 0x6F], 'both identifiers in one request');
-    await assert.rejects(link.readMany(0x12, [1, 2, 3, 4, 5, 6, 7, 8, 9]), /1 to 8 identifiers/);
+    await rejects(link.readMany(0x12, [1, 2, 3, 4, 5, 6, 7, 8, 9]), /1 to 8 identifiers/);
     assert.deepStrictEqual(await link.physical(0x12, 0x01, [0x0C], 500, (u) => u[0] === 0x41), [0x41, 0x0C, 0x20]);
     const units = await link.discover();
     assert.deepStrictEqual(Array.from(units.entries()), [[0x12, '0F26E8'], [0x40, '']]);
     // every service but reading is refused before it is sent
     const before = t.sent.length;
     for (const sid of [0x10, 0x11, 0x14, 0x19, 0x27, 0x28, 0x2C, 0x2E, 0x2F, 0x31, 0x34, 0x36, 0x37, 0x3D, 0x3E, 0x85]) {
-        await assert.rejects(link.physical(0x12, sid, [0x01, 0x02], 100), /not allowed/);
+        await rejects(link.physical(0x12, sid, [0x01, 0x02], 100), /not allowed/);
     }
-    await assert.rejects(link.physical(0xDF, 0x22, [0xF1, 0x90], 100), /functional/);
+    await rejects(link.physical(0xDF, 0x22, [0xF1, 0x90], 100), /functional/);
     assert.strictEqual(t.sent.length, before, 'nothing refused reached the transport');
     assert.strictEqual(link.stats.blocked, 18);
     // the bytes checked are the bytes sent, even if the caller changes its array afterwards
@@ -282,7 +293,7 @@ async function main() {
         assert.deepStrictEqual(cat['1000'].f, [{ n: 'STAT_READ', t: 'u16', at: 0, k: 0.1, u: 'bar' }]);
         assert.deepStrictEqual(cat['1007'].f.map((f) => [f.n, f.t, f.at, f.k]), [['STAT_A', 'u8', 0, undefined], ['STAT_B', 's16', 1, 0.01]]);
     } finally {
-        fs.rmSync(tmp, { recursive: true, force: true });
+        removeTree(tmp);
     }
 
     /* ---------- car signals: what they need, how they read, the fuel signal's scaling ---------- */
@@ -437,7 +448,7 @@ async function main() {
     const stage = fs.mkdtempSync(path.join(os.tmpdir(), 'live-data-app-'));
     fs.symlinkSync(kit, path.join(stage, 'kit'), 'dir');
     fs.copyFileSync(path.join(ROOT, 'apps', 'tgl_live_data', 'picker.js'), path.join(stage, 'picker.js'));
-    process.on('exit', () => fs.rmSync(stage, { recursive: true, force: true }));
+    process.on('exit', () => removeTree(stage));
     const PICK = require(path.join(stage, 'picker'));
     const picked = [];
     let lay = 'dial2', removed = 0;
