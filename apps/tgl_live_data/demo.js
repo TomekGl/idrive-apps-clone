@@ -28,6 +28,11 @@ const LIVE = {
     0x4436: () => be(wave(9, 3300, 5200), 2),                     // oil pressure, absolute hPa
     0x411A: () => be(71 * 512, 2).concat(be(64 * 512, 2), be(412 * 3600, 4)),     // oil life left (%, %), engine hours on this oil (s)
 };
+// the brake unit's DBE4: four wheel speeds, the vehicle speed (0.01 km/h, signed), the directions and the signal quality
+const WHEELS = () => {
+    const v = wave(14, 20, 80), s = (x) => be((Math.round(x * 100) + 65536) & 0xFFFF, 2);
+    return [].concat(s(v), s(v), s(v * 1.004), s(v * 1.004), s(v), [1, 1, 1, 1, 1], [100, 100, 100, 100]);
+};
 // OBD service 01 PID -> data bytes
 const OBD = {
     0x04: () => [Math.round(wave(7, 18, 45) * 2.55)], 0x05: () => [92 + 40], 0x06: () => [Math.round(wave(5, 124, 133))],
@@ -91,6 +96,7 @@ function reply(addr, sid, id, need, e) {
         if (id === 0xF186) return head.concat([1]);
         if (id === 0xF18A) return head.concat(ascii(addr === 0x12 ? 'BOSCH' : 'BMW'));
         if (id >= 0xF180 && id <= 0xF19F) return head.concat(ascii('DEMO-' + addr.toString(16).toUpperCase() + '-' + id.toString(16).toUpperCase()));
+        if (addr === 0x29 && id === 0xDBE4) return head.concat(WHEELS());
         if (addr === 0x12 && LIVE[id]) return head.concat(LIVE[id]());
         const good = addr === 0x12 ? believable(id, e) : null;
         if (good) return head.concat(good);

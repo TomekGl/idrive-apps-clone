@@ -9,7 +9,7 @@
 
 <sgbd> (e.g. dme8ff_r) is read from the public EdiabasX SGBD reference,
 https://emdzej.github.io/ediabasx-docs-sgbd/sgbd/<sgbd>/ (a saved copy of that page works too).
-out_dir defaults to apps/live_data/catalog (not in git: the tables are BMW's); build.py packs it
+out_dir defaults to apps/tgl_live_data/catalog (not in git: the tables are BMW's); build.py packs it
 into the app (catalog.pack).
 
 Only what can be READ goes in: the rows of SG_FUNKTIONEN whose SERVICE includes 22
@@ -29,8 +29,8 @@ value = raw * k + o; the texts are German, the app shows the English one when th
 --index copies sgbd_index.json ("<address> <SGBD index>" -> unit type) from the Fault Scanner's
 database (apps/dtc_scanner/dtc_db.pack or dtc_db/), so the app knows which catalog a unit uses.
 
---builtin writes apps/live_data/builtin/ (in git): from a full catalog, only the identifiers the
-app's Useful list (apps/live_data/useful.js) names, their value tables and English texts, and the
+--builtin writes apps/tgl_live_data/builtin/ (in git): from a full catalog, only the identifiers the
+app's Useful list (apps/tgl_live_data/useful.js) names, their value tables and English texts, and the
 SGBD index. The app uses it when it has no full catalog for a unit type.
 """
 import html, json, os, re, struct, sys, urllib.request, zlib
@@ -38,7 +38,7 @@ from datetime import date
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.normpath(os.path.join(HERE, '..', '..'))
-OUT = os.path.join(ROOT, 'apps', 'live_data', 'catalog')
+OUT = os.path.join(ROOT, 'apps', 'tgl_live_data', 'catalog')
 URL = 'https://emdzej.github.io/ediabasx-docs-sgbd/sgbd/%s/'
 SIZES = {'u8': 1, 's8': 1, 'u16': 2, 's16': 2, 'u32': 4, 's32': 4, 'f32': 4}
 TYPES = {'unsigned char': 'u8', 'signed char': 's8', 'unsigned int': 'u16', 'signed int': 's16',
@@ -324,17 +324,23 @@ def cmd_add(sgbd, file, out):
     print('%s: %d texts added or changed, %d in all' % (os.path.basename(en_file), n, len(en)))
 
 
-BUILTIN = os.path.join(ROOT, 'apps', 'live_data', 'builtin')
-USEFUL = os.path.join(ROOT, 'apps', 'live_data', 'useful.js')
+BUILTIN = os.path.join(ROOT, 'apps', 'tgl_live_data', 'builtin')
+USEFUL = os.path.join(ROOT, 'apps', 'tgl_live_data', 'useful.js')
+
+
+# unit types besides the engine unit whose built-in catalog is made from the full one: the identifiers useful.js
+# names for them (the engine unit's catalog takes every other identifier useful.js names)
+OTHER = {'DSC_G30N': ['DBE4']}
 
 
 def cmd_builtin(src):
     """the identifiers useful.js names, per unit type it has a list for"""
     with open(USEFUL, encoding='utf-8') as f:
         code = re.sub(r'/\*.*?\*/|//[^\n]*', '', f.read(), flags=re.S)
-    dids = set(re.findall(r"'([0-9A-F]{4})(?:/\d+)?'", code))
+    named = set(re.findall(r"'([0-9A-F]{4})(?:/\d+)?'", code))
     os.makedirs(BUILTIN, exist_ok=True)
-    for sgbd in ('DME8FF_R',):
+    for sgbd in ('DME8FF_R',) + tuple(OTHER):
+        dids = set(OTHER[sgbd]) if sgbd in OTHER else named - {d for v in OTHER.values() for d in v}
         cat, meta = load(os.path.join(src, sgbd + '.json'), None), load(os.path.join(src, sgbd + '.meta.json'), None)
         if cat is None or meta is None:
             sys.exit('no catalog for %s in %s: run sgbd_catalog.py %s first' % (sgbd, src, sgbd.lower()))

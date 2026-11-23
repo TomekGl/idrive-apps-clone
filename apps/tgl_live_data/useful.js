@@ -193,7 +193,28 @@ function BANK2(perBank) {
     ];
 }
 
+// the unit types whose built-in catalog is the Energy page's alone (their identifiers are not on the unit's page)
+const ENERGY = { BATT48: 1, PCU48: 1 };
+const wheel = (name, i) => ({ name, c: ['DBE4/' + i], u: 'km/h', d: 1 });
 const BY_SGBD = {
+    // DSC (0x29), SGBD DSC_G30N: the brake control unit's wheel speeds (the Wheels page); direction and signal quality
+    // as the SGBD's tables have them (signal quality: under 10 % no signal, 10 - 50 % weak)
+    DSC_G30N: [
+        { group: 'Wheel speeds (DSC)', items: [
+            wheel('Wheel speed, front left', 0), wheel('Wheel speed, front right', 1),
+            wheel('Wheel speed, rear left', 2), wheel('Wheel speed, rear right', 3),
+            wheel('Vehicle speed (DSC)', 4),
+        ] },
+        { group: 'Wheel direction and signal (DSC)', items: [
+            { name: 'Wheel direction, front left', c: ['DBE4/5'] }, { name: 'Wheel direction, front right', c: ['DBE4/6'] },
+            { name: 'Wheel direction, rear left', c: ['DBE4/7'] }, { name: 'Wheel direction, rear right', c: ['DBE4/8'] },
+            { name: 'Driving direction (DSC)', c: ['DBE4/9'] },
+            { name: 'Wheel sensor signal, front left', c: ['DBE4/10'], u: '%', d: 0 },
+            { name: 'Wheel sensor signal, front right', c: ['DBE4/11'], u: '%', d: 0 },
+            { name: 'Wheel sensor signal, rear left', c: ['DBE4/12'], u: '%', d: 0 },
+            { name: 'Wheel sensor signal, rear right', c: ['DBE4/13'], u: '%', d: 0 },
+        ] },
+    ],
     BATT48: [
         { group: '48 V battery', items: [
             { name: 'Battery voltage', c: ['AA56/0'], u: 'V', d: 2 },
@@ -231,4 +252,4 @@ const CONVERT = {
     mV: { V: 0.001 }, cl: { l: 0.01 }, min: { h: 1 / 60 }, s: { h: 1 / 3600 }, '°CA': { '°': 1 }, '°C': { '°': 1 },
 };
 
-module.exports = { 0x12: DME, bySgbd: BY_SGBD, CONVERT, BANK2 };
+module.exports = { 0x12: DME, bySgbd: BY_SGBD, ENERGY, CONVERT, BANK2 };
