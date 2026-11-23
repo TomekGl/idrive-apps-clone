@@ -1,0 +1,21 @@
+{
+ "Auslesen Raddrehzahlfühler": "Wheel speed sensors",
+ "Fahrrichtung": "Driving direction",
+ "Fahrzeuggeschwindigkeit": "Vehicle speed",
+ "Raddrehrichtung hinten links": "Wheel direction, rear left",
+ "Raddrehrichtung hinten rechts": "Wheel direction, rear right",
+ "Raddrehrichtung vorne links": "Wheel direction, front left",
+ "Raddrehrichtung vorne rechts": "Wheel direction, front right",
+ "Radgeschwindigkeit hinten links": "Wheel speed, rear left",
+ "Radgeschwindigkeit hinten rechts": "Wheel speed, rear right",
+ "Radgeschwindigkeit vorne links": "Wheel speed, front left",
+ "Radgeschwindigkeit vorne rechts": "Wheel speed, front right",
+ "Rueckwaerts": "Reverse",
+ "Signalqualität hinten links x < 10 % = kein Signal; 10 % <= x <= 50 % schwaches Signal; x > 50 % Signal in Ordnung": "Sensor signal quality, rear left (under 10 % no signal, 10 - 50 % weak)",
+ "Signalqualität hinten rechts x < 10 % = kein Signal; 10 % <= x <= 50 % schwaches Signal; x > 50 % Signal in Ordnung": "Sensor signal quality, rear right (under 10 % no signal, 10 - 50 % weak)",
+ "Signalqualität vorne links x < 10 % = kein Signal; 10 % <= x <= 50 % schwaches Signal; x > 50 % Signal in Ordnung": "Sensor signal quality, front left (under 10 % no signal, 10 - 50 % weak)",
+ "Signalqualität vorne rechts x < 10 % = kein Signal; 10 % <= x <= 50 % schwaches Signal; x > 50 % Signal in Ordnung": "Sensor signal quality, front right (under 10 % no signal, 10 - 50 % weak)",
+ "Stand": "Standstill",
+ "Vorwaerts": "Forward",
+ "nicht definiert": "Undefined"
+}

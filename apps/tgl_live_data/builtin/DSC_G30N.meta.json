@@ -1,0 +1,1 @@
+{"sgbd":"DSC_G30N","ecu":"Dynamische Stabilitätskontrolle EBC460 SP2018","revision":"0.401","comment":"DSC-EBC_SP18-BRS für die S15A-20-07-310","source":"DSC_G30N.html","made":"2026-11-23","order":["DBE4"],"enums":{"TAB_DREHRICHTUNG":{"0":"Stand","1":"Vorwaerts","2":"Rueckwaerts","3":"nicht definiert"}},"builtin":true}

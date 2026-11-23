@@ -82,7 +82,7 @@ const INDEX = CAT.json('sgbd_index.json');
 // a unit type without a catalog of its own uses its family's; every value is still asked on the car
 // (0x13: the second engine unit of a V8, DME8FF_L / DME98_L: the same identifiers as its master's, kit/twin_dme.js;
 // only for a V8's index)
-const CLOSEST = { 0x12: 'DME8FF_R', 0x13: 'DME8FF_R' };
+const CLOSEST = { 0x12: 'DME8FF_R', 0x13: 'DME8FF_R', 0x29: 'DSC_G30N' };
 const ABSENT = [0x11, 0x12, 0x31];   // NRCs that mean "this unit has no such value"
 
 // the baked fonts are ASCII + a few signs: German letters spelled out
@@ -136,7 +136,7 @@ mgu.run({
         const changed = () => { version++; if (loop) loop.kick(); };
         // the car signals' page, as a "unit" for the lists
         const SIGU = { sig: true, addr: 'sig', ver: 0, view: null };
-        const relayout = () => { layoutVer++; units.forEach((u) => { u.view = null; u.eview = null; }); if (soloDme) soloDme.eview = null; if (soloSlave) soloSlave.view = null; SIGU.view = null; changed(); };
+        const relayout = () => { layoutVer++; units.forEach((u) => { u.view = null; u.eview = null; }); if (soloDme) soloDme.eview = null; if (soloDsc) soloDsc.view = null; if (soloSlave) soloSlave.view = null; SIGU.view = null; changed(); };
 
         function makeUnit(addr, index, demo) {
             const variant = index ? INDEX[hex(addr) + ' ' + index] || null : null;
@@ -158,13 +158,21 @@ mgu.run({
         })();
         const unitName = (u) => ECU[u.addr] || u.variant || 'ECU 0x' + hex(u.addr);
         // the engine unit (0x12) is there on every car this is for: its values are read with or without a scan
-        let soloDme = null, soloSlave = null;       // the engine unit without a scan; a twin-unit engine's second one
+        let soloDme = null, soloSlave = null, soloDsc = null;       // the engine unit without a scan; a twin-unit engine's second one
         function engineUnit() {
             const u = units.find((x) => x.addr === 0x12);
             if (u) return u;
             const demo = useDemo();
             if (!soloDme || !!soloDme.demo !== demo) { soloDme = makeUnit(0x12, null, demo); layoutVer++; }
             return soloDme;
+        }
+        // the brake unit (0x29) the same way: its wheel speeds are read with or without a scan
+        function dscUnit() {
+            const u = units.find((x) => x.addr === 0x29);
+            if (u) return u;
+            const demo = useDemo();
+            if (!soloDsc || !!soloDsc.demo !== demo) { soloDsc = makeUnit(0x29, null, demo); layoutVer++; }
+            return soloDsc;
         }
         /*
          * A V8 with two engine units (kit/twin_dme.js): the master's SGBD index says so (asked once, the answer
@@ -208,7 +216,7 @@ mgu.run({
         const PER_BANK = USEFUL.BANK2(4).reduce((m, g) => { g.items.forEach((i) => { if (!/, cylinder \d+$/.test(i.name)) m[i.name] = 1; }); return m; }, {});
         const bankName = (u, item) => (!u || !PER_BANK[item.name] || !isTwin() ? item.name
             : u.addr === 0x13 ? 'Bank 2: ' + item.name : u.addr === 0x12 ? 'Bank 1: ' + item.name : item.name);
-        const unitAt = (addr) => (addr === 0x12 ? engineUnit() : addr === 0x13 ? slaveUnit() || units.find((y) => y.addr === addr) || null
+        const unitAt = (addr) => (addr === 0x12 ? engineUnit() : addr === 0x29 ? dscUnit() : addr === 0x13 ? slaveUnit() || units.find((y) => y.addr === addr) || null
             : units.find((y) => y.addr === addr) || null);
 
         /* ---------- values of a unit ---------- */
@@ -224,7 +232,7 @@ mgu.run({
                 Object.keys(STD.INFO).forEach((k) => add(k, STD.INFO[k], 'std'));
             }
             const c = catalog(u.sgbd);
-            if (c && (energy || !c.builtin || !USEFUL.bySgbd[u.sgbd])) { // curated battery catalogs are reserved for Energy
+            if (c && (energy || !c.builtin || !USEFUL.ENERGY[u.sgbd])) { // curated battery catalogs are reserved for Energy
                 c.meta.order.forEach((did) => {
                     const e = c.dids[did];
                     if (e.sid === undefined) { e.sid = 0x22; e.id = parseInt(did, 16); }
@@ -366,10 +374,21 @@ mgu.run({
             u.eview = { ver, rows };
             return rows;
         }
+        /** Wheels: the brake unit's wheel speeds, their directions and sensor signal (useful.js DSC_G30N) */
+        function wheelsView() {
+            const u = dscUnit(), rows = [];
+            (usefulOf(u) || []).forEach((g) => {
+                const items = g.items.filter((ur) => (ur.parts ? ur.parts.every((p) => maybe(u, p)) : ur.cands.some((r) => maybe(u, r))));
+                if (!items.length) return;
+                rows.push({ header: g.group });
+                items.forEach((useful) => rows.push({ unit: u, useful }));
+            });
+            return rows;
+        }
         /** Energy: only the 12 V, 48 V battery and converter values selected in useful.js. */
         function energyView() {
             const rows = [], energyUnits = [engineUnit()].concat(
-                units.filter((u) => u.addr !== 0x12 && USEFUL.bySgbd[u.sgbd])
+                units.filter((u) => u.addr !== 0x12 && USEFUL.ENERGY[u.sgbd])
             );
             energyUnits.forEach((u) => {
                 (usefulOf(u) || []).forEach((g) => {
@@ -728,6 +747,14 @@ mgu.run({
                     fav: { addr: u.addr, sgbd: u.sgbd, useful: ur.item.name, c: ur.item.c || ur.item.minus, minus: !!ur.item.minus, u: ur.item.u, name: ur.item.name },
                 })),
             }));
+            const dsc = dscUnit();
+            (usefulOf(dsc) || []).forEach((g) => out.push({
+                name: translate('Brake unit') + ': ' + translate(g.group),
+                items: g.items.map((ur) => ({
+                    key: dsc.addr + ':useful:' + ur.item.name, name: ur.item.name, text: () => usefulValue(dsc, ur),
+                    fav: { addr: dsc.addr, sgbd: dsc.sgbd, useful: ur.item.name, c: ur.item.c, u: ur.item.u, name: ur.item.name },
+                })),
+            }));
             // a twin-unit engine's second unit: bank 2's values (named "Bank 2: ..." on a gauge)
             const s2 = slaveUnit();
             (s2 ? usefulOf(s2) || [] : []).forEach((g) => out.push({
@@ -869,7 +896,7 @@ mgu.run({
         function pages() {
             const eu = engineUnit();
             const s2 = slaveUnit();
-            const v = [layoutVer, SIGU.ver, scrVer, tripsOn(), scrolls, eu.ver, s2 ? s2.ver : '-', units.map((u) => u.ver).join(',')].join(':');
+            const v = [layoutVer, SIGU.ver, scrVer, tripsOn(), scrolls, eu.ver, dscUnit().ver, s2 ? s2.ver : '-', units.map((u) => u.ver).join(',')].join(':');
             if (pagesCache && pagesCache.v === v) return pagesCache.list;
             const list = [], n = (rows) => (scrolls ? 1 : Math.max(1, Math.ceil(rows / ROWS)));
             const ns = screens.length + (screens.length < SCR.MAX_SCREENS ? 1 : 0);
@@ -882,6 +909,8 @@ mgu.run({
             for (let p = 0; p < xn; p++) list.push({ group: 'energy', p, n: xn });
             const en = n(engineView().length);
             for (let p = 0; p < en; p++) list.push({ group: 'engine', unit: eu, p, n: en });
+            const wn = n(wheelsView().length);
+            for (let p = 0; p < wn; p++) list.push({ group: 'wheels', p, n: wn });
             list.push({ group: 'units', unit: null, p: 0, n: 1 });
             units.forEach((u) => {
                 const un = n(view(u).length);
@@ -894,7 +923,7 @@ mgu.run({
         /** a list page's rows: the whole list where it scrolls, else this page's */
         function listRows(pg) {
             const all = pg.group === 'signals' ? sigView() : pg.group === 'energy' ? energyView()
-                : pg.group === 'engine' ? engineView() : pg.unit ? view(pg.unit) : [];
+                : pg.group === 'wheels' ? wheelsView() : pg.group === 'engine' ? engineView() : pg.unit ? view(pg.unit) : [];
             return scrolls ? all : all.slice(pg.p * ROWS, pg.p * ROWS + ROWS);
         }
         /** the rows of a list in sight now (what is read): where it scrolls, those in the window */
@@ -1005,7 +1034,7 @@ mgu.run({
             // what is shown: [unit, rows to ask] (a screen, the widget: each value from its own unit; a list: its rows in sight)
             const rowAsks = (u, r) => (r.header || r.sig ? [] : r.useful ? usefulRows(u, r.useful) : [r]);
             const shown = its.length ? its.filter((x) => x.unit).map((x) => [x.unit, x.useful ? usefulRows(x.unit, x.useful) : x.row ? [x.row] : []])
-                : pg && pg.group === 'energy' ? shownRows(pg).filter((r) => r.unit).map((r) => [r.unit, rowAsks(r.unit, r)])
+                : pg && (pg.group === 'energy' || pg.group === 'wheels') ? shownRows(pg).filter((r) => r.unit).map((r) => [r.unit, rowAsks(r.unit, r)])
                     : pg && pg.unit && !pg.unit.sig ? shownRows(pg).map((r) => [r.unit || pg.unit, rowAsks(r.unit || pg.unit, r)]) : [];
             // the fuel signal's l/h shown but its scaling not learned yet, or the trip computer needing a fuel figure:
             // the engine unit's figures alongside (for the trip computer each once a second)
@@ -1173,7 +1202,7 @@ mgu.run({
             const pg = current();
             if (pg.screen) { cursor = Math.max(0, Math.min(SCR.layout(pg.screen.layout).slots.length - 1, cursor + d)); changed(); return; }
             if (pg.group === 'units' && !pg.unit) { cursor = Math.max(0, Math.min(units.length - 1, cursor + d)); changed(); return; }
-            if (!pg.unit && pg.group !== 'trips' && pg.group !== 'energy') return;
+            if (!pg.unit && pg.group !== 'trips' && pg.group !== 'energy' && pg.group !== 'wheels') return;
             if (pg.group === 'trips') { turnPage(d > 0 ? 1 : -1); return; }
             // a list: row by row, on into the group's next / previous page
             const l = pages(), same = (x) => x.group === pg.group && x.unit === pg.unit;
@@ -1351,6 +1380,25 @@ mgu.run({
             }) || gliding;
         }
 
+        function drawWheels(cv, t, pg) {
+            const u = dscUnit(), all = wheelsView(), rows = listRows(pg);
+            const items = all.filter((r) => r.useful);
+            const ok = items.filter((r) => usefulRows(u, r.useful).every((x) => state(u.res[x.key]) === 'ok')).length;
+            const note = browseNote('knob: scroll  ·  push up / down: page') || (u.silent ? 'The brake unit isn\'t answering (ignition on?)'
+                : (scrolls || items.length <= ROWS ? '' : translate('page') + ' ' + (pg.p + 1) + ' ' + translate('of') + ' ' + pg.n + '  ·  ')
+                    + ok + ' ' + translate('of') + ' ' + items.length + ' ' + translate('values read'));
+            gliding = PAGES.listPanel(cv, t, G, fit, {
+                title: 'Wheels', note, noteColor: u.silent ? t.warn : null, details: details(),
+                rows: rows.map((row) => {
+                    if (row.header) return row;
+                    const v = usefulValue(u, row.useful);
+                    return { name: row.useful.item.name, source: usefulSource(u, row.useful), text: v.text, dim: v.dim, warn: v.warn };
+                }),
+                scroll: scrolls ? scrollOf(pg) : null, key: listKey(pg), cursor: browsing ? cursor : -1,
+                empty: u.demo ? 'Loading...' : 'The brake unit has no values to show',
+            }) || gliding;
+        }
+
         function drawSignals(cv, t, pg) {
             const all = sigView(), items = all.filter((r) => r.sig), rows = listRows(pg);
             const n = items.filter((r) => { const v = sigValue(r.sig); return v && !v.bad; }).length;
@@ -1476,7 +1524,7 @@ mgu.run({
         // a finger dragged on a list or the controller turned on it (cv.scroll): the list moves
         if (ctx.onScroll) ctx.onScroll((dy) => {
             const pg = current();
-            if (!pg.unit && pg.group !== 'energy') return false;
+            if (!pg.unit && pg.group !== 'energy' && pg.group !== 'wheels') return false;
             const s = scrollOf(pg), y = G.clamp(s.y + dy, 0, s.max), moved = y !== s.y;
             s.y = y;
             if (moved) changed();
@@ -1505,6 +1553,7 @@ mgu.run({
             else if (pg.group === 'trips') drawTrips(cv, t, pg);
             else if (pg.group === 'signals') drawSignals(cv, t, pg);
             else if (pg.group === 'energy') drawEnergy(cv, t, pg);
+            else if (pg.group === 'wheels') drawWheels(cv, t, pg);
             else if (pg.group === 'engine') drawEngine(cv, t, pg);
             else if (pg.unit) drawUnit(cv, t, pg);
             else drawUnits(cv, t);
@@ -1515,11 +1564,13 @@ mgu.run({
             tabs.push([pg.group === 'signals', 'Signals' + (pg.group === 'signals' ? pp(pg) : ''), 'signals'],
                 [pg.group === 'energy', 'Energy' + (pg.group === 'energy' ? pp(pg) : ''), 'energy'],
                 [pg.group === 'engine', 'Engine' + (pg.group === 'engine' ? pp(pg) : ''), 'engine'],
+                [pg.group === 'wheels', 'Wheels' + (pg.group === 'wheels' ? pp(pg) : ''), 'wheels'],
                 [pg.group === 'units', pg.group === 'units' && pg.unit ? ECU[pg.unit.addr] ? ECU[pg.unit.addr].split(' ')[0] + pp(pg) : 'Unit' + pp(pg) : 'Units', 'units']);
             tabKeys = tabs.map((x) => x[2]);
             const isDemo = (x) => (x.isSig ? !(x.sig && x.sig.tc) && sigDemo() : !!(x.unit && x.unit.demo));      // the trip computer's: always the car's
             const demoNow = pg.group === 'trips' ? false : pg.screen ? screenItems(pg.screen).some(isDemo) : pg.group === 'signals' ? sigDemo()
                 : pg.group === 'energy' ? energyView().some((r) => r.unit && r.unit.demo)
+                : pg.group === 'wheels' ? dscUnit().demo
                 : pg.unit ? !!pg.unit.demo : demoUnits || (!units.length && useDemo());
             G.frame(cv, t, tabs.map((x) => x[1]), Math.max(0, tabs.findIndex((x) => x[0])),
                 [demoNow && { text: 'DEMO' }, browsing && { text: 'KNOB', color: 'accent' }]);
